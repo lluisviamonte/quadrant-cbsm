@@ -1,19 +1,27 @@
-QUADRANT CBSM v5 SINCRONITZADA
+QUADRANT CBSM v6 MULTIUSUARI
 
-Aquesta versió manté GitHub Pages com a app i utilitza Firebase per sincronitzar dades.
+QUÈ CANVIA
+- Tots els usuaris autoritzats treballen sobre el mateix quadrant.
+- Canvis de PC, iPhone o altres dispositius se sincronitzen amb Firebase.
+- L'administrador principal pot crear nous usuaris des de la mateixa app.
+- També pot revocar-los l'accés.
+- El guardat local/offline continua actiu.
+- Les dades de la v5 de l'administrador es migren automàticament al primer inici.
 
-PASSOS:
-1. Puja tots els fitxers d'aquesta carpeta al repositori de GitHub Pages i substitueix els anteriors.
-2. A Firebase > Firestore Database > Reglas, copia el contingut de firestore.rules.txt i prem Publicar.
-3. Obre l'app al PC i inicia sessió amb l'usuari que has creat a Firebase Authentication.
-4. Obre l'app a l'iPhone i inicia sessió amb el mateix usuari.
-5. A partir d'aquí, les setmanes i els partits se sincronitzen entre els dos dispositius.
+ADMINISTRADOR PRINCIPAL
+UID: EY9wXGdbKONum3VvAIrXvaBJz0Z2
 
-UID autoritzat:
-EY9wXGdbKONum3VvAIrXvaBJz0Z2
+ABANS D'UTILITZAR-LA
+1. Puja TOTS els fitxers del ZIP al repositori de GitHub Pages, substituint els anteriors.
+2. Firebase > Firestore Database > Reglas.
+3. Copia el contingut de firestore.rules.txt.
+4. Prem Publicar.
+5. Obre l'app i comprova que posa “v6 multiusuari”.
+6. Inicia sessió amb el teu usuari actual.
+7. A “Usuaris amb accés” pots posar correu + contrasenya inicial i crear un usuari.
+8. La persona nova inicia sessió a la mateixa app amb les seves credencials.
 
-NOTES:
-- La contrasenya no queda escrita dins l'app.
-- Firebase Authentication recorda la sessió al dispositiu quan el navegador ho permet.
-- El guardat local continua funcionant com a còpia/offline.
-- Si no hi ha internet, els canvis queden locals i l'app intenta sincronitzar quan torna la connexió.
+IMPORTANT
+- Revocar l'accés des de l'app elimina el permís per veure/modificar el quadrant.
+- El compte pot continuar apareixent a Firebase Authentication; això no li dona accés sense el document de membre.
+- No comparteixis la teva contrasenya d'administrador.

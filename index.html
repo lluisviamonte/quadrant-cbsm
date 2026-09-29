@@ -87,6 +87,23 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
   .cloudLogged button{width:100%}
 }
 
+
+.userAdminBox{margin-top:14px;padding-top:12px;border-top:1px solid #d9dee5}
+.userAdminBox h3{margin:0 0 6px}
+.userAdminForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.userAdminForm input{min-width:220px;flex:1}
+.membersList{margin-top:10px}
+.memberRow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;border:1px solid #d9dee5;border-radius:8px;margin-top:6px;background:#fafcfd}
+.memberInfo{min-width:0}
+.memberEmail{font-weight:700;overflow-wrap:anywhere}
+.memberMeta{font-size:11px;color:#69737d}
+@media(max-width:700px){
+  .userAdminForm{display:grid;grid-template-columns:1fr}
+  .userAdminForm input,.userAdminForm button{width:100%}
+  .memberRow{align-items:flex-start;flex-direction:column}
+  .memberRow button{width:100%}
+}
+
 </style>
 
 <link rel="manifest" href="manifest.json">
@@ -106,7 +123,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 <body>
 <header>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v5 sincronitzada</span></h1>
+        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v6 multiusuari</span></h1>
         <button id="installBtn" class="secondary noPrint" style="display:none">Instal·lar app</button>
       </div>
     </header>
@@ -116,22 +133,36 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 
 <main>
 
+
 <div class="panel noPrint cloudPanel">
   <div class="cloudTop">
     <div>
-      <strong>Sincronització PC ↔ iPhone</strong>
+      <strong>Sincronització multiusuari · CB Santa Maria</strong>
       <div id="cloudStatus" class="small">Núvol: preparant…</div>
     </div>
     <button id="syncNowBtn" class="secondary" type="button" onclick="manualCloudSync()" style="display:none">Sincronitzar ara</button>
   </div>
+
   <div id="cloudLogin" class="cloudLogin">
     <input id="cloudEmail" type="email" autocomplete="email" placeholder="Correu de Firebase">
     <input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Contrasenya">
     <button class="primary" type="button" onclick="loginCloud()">Entrar</button>
   </div>
+
   <div id="cloudLogged" class="cloudLogged" style="display:none">
     <span id="cloudUser"></span>
     <button class="secondary" type="button" onclick="logoutCloud()">Tancar sessió</button>
+  </div>
+
+  <div id="userAdminPanel" class="userAdminBox" style="display:none">
+    <h3>Usuaris amb accés</h3>
+    <p class="small">Com a administrador pots crear un usuari nou. Tots els usuaris autoritzats veuran i editaran el mateix quadrant.</p>
+    <div class="userAdminForm">
+      <input id="newUserEmail" type="email" autocomplete="off" placeholder="Correu del nou usuari">
+      <input id="newUserPassword" type="password" autocomplete="new-password" placeholder="Contrasenya inicial (mín. 6 caràcters)">
+      <button class="primary" type="button" onclick="createClubUser()">Crear usuari</button>
+    </div>
+    <div id="membersList" class="membersList"></div>
   </div>
 </div>
 
@@ -583,11 +614,13 @@ const FIREBASE_CONFIG = {
   appId: "1:186598747227:web:5fc8ec8e3f6b4ecaa1a37e",
   measurementId: "G-L24SNSY15W"
 };
-const CBSM_ALLOWED_UID = "EY9wXGdbKONum3VvAIrXvaBJz0Z2";
+
+const CBSM_OWNER_UID = "EY9wXGdbKONum3VvAIrXvaBJz0Z2";
 const CBSM_DELETED_WEEKS_KEY = "cbsm_deleted_weeks";
 
 let fbAuth=null, fbDb=null, cloudUser=null, cloudReady=false, cloudUnsubscribe=null;
 let cloudSyncBusy=false;
+let cloudIsOwner=false;
 
 function updatedKey(key){ return "cbsm_week_updated_"+key; }
 function localWeekExists(key){ return localStorage.getItem("cbsm_week_games_"+key)!==null; }
@@ -610,40 +643,78 @@ function clearWeekDeleted(key){
   const d=getDeletedWeeks();
   if(Object.prototype.hasOwnProperty.call(d,key)){ delete d[key]; setDeletedWeeks(d); }
 }
+
 function setCloudStatus(text, kind=""){
   const el=document.getElementById("cloudStatus");
   if(!el) return;
   el.textContent=text;
   el.className="small "+(kind==="ok"?"cloudOk":kind==="warn"?"cloudWarn":kind==="error"?"cloudError":"");
 }
+
 function updateCloudUI(user){
   const login=document.getElementById("cloudLogin");
   const logged=document.getElementById("cloudLogged");
   const syncBtn=document.getElementById("syncNowBtn");
   const userEl=document.getElementById("cloudUser");
+  const admin=document.getElementById("userAdminPanel");
   if(!login||!logged) return;
-  if(user && user.uid===CBSM_ALLOWED_UID){
+
+  if(user && cloudReady){
     login.style.display="none";
     logged.style.display="flex";
     if(syncBtn) syncBtn.style.display="inline-block";
-    if(userEl) userEl.textContent=user.email||"Usuari CBSM";
+    if(userEl) userEl.textContent=(user.email||"Usuari CBSM")+(cloudIsOwner?" · Administrador":" · Usuari");
+    if(admin) admin.style.display=cloudIsOwner?"block":"none";
   }else{
     login.style.display="flex";
     logged.style.display="none";
     if(syncBtn) syncBtn.style.display="none";
     if(userEl) userEl.textContent="";
+    if(admin) admin.style.display="none";
   }
 }
-function weeksRef(){
-  if(!fbDb||!cloudUser) return null;
-  return fbDb.collection("users").doc(cloudUser.uid).collection("weeks");
+
+function clubRef(){
+  if(!fbDb) return null;
+  return fbDb.collection("clubs").doc("cbsm");
 }
+function weeksRef(){
+  const c=clubRef();
+  return c ? c.collection("weeks") : null;
+}
+function membersRef(){
+  const c=clubRef();
+  return c ? c.collection("members") : null;
+}
+function memberRef(uid){
+  const r=membersRef();
+  return r ? r.doc(uid) : null;
+}
+
+async function isAuthorizedUser(user){
+  if(!user) return false;
+  if(user.uid===CBSM_OWNER_UID) return true;
+  try{
+    const doc=await memberRef(user.uid).get();
+    return doc.exists;
+  }catch(e){
+    return false;
+  }
+}
+
 function cloudWeekPayload(key, ts){
   let g=[], sch=[];
   try{ g=JSON.parse(localStorage.getItem("cbsm_week_games_"+key)||"[]"); }catch(e){}
   try{ sch=JSON.parse(localStorage.getItem("cbsm_week_schedule_"+key)||"[]"); }catch(e){}
-  return {weekKey:key,games:g,schedule:sch,updatedAtMs:ts||localUpdatedAt(key)||Date.now()};
+  return {
+    weekKey:key,
+    games:g,
+    schedule:sch,
+    updatedAtMs:ts||localUpdatedAt(key)||Date.now(),
+    updatedBy:cloudUser?.email||cloudUser?.uid||""
+  };
 }
+
 async function cloudSaveWeek(key, ts=null){
   if(!cloudReady||!weeksRef()) return false;
   const when=ts||localUpdatedAt(key)||markLocalUpdated(key);
@@ -658,6 +729,7 @@ async function cloudSaveWeek(key, ts=null){
     return false;
   }
 }
+
 async function cloudDeleteWeek(key, ts=null){
   if(!cloudReady||!weeksRef()) return false;
   try{
@@ -672,6 +744,7 @@ async function cloudDeleteWeek(key, ts=null){
     return false;
   }
 }
+
 function pullRemoteWeek(key, data){
   const ts=+(data.updatedAtMs||0);
   try{
@@ -681,6 +754,7 @@ function pullRemoteWeek(key, data){
     clearWeekDeleted(key);
   }catch(e){}
 }
+
 function getLocalWeekKeys(){
   const prefix="cbsm_week_games_";
   const keys=[];
@@ -690,6 +764,29 @@ function getLocalWeekKeys(){
   }
   return [...new Set(keys)].sort();
 }
+
+// Primera migració: copia automàticament les dades de la v5 de l'administrador
+// a l'espai compartit, si encara no hi ha cap setmana compartida.
+async function migrateLegacyOwnerData(){
+  if(!cloudIsOwner||!fbDb||!weeksRef()) return;
+  try{
+    const sharedCheck=await weeksRef().limit(1).get();
+    if(!sharedCheck.empty) return;
+
+    const legacy=await fbDb.collection("users").doc(CBSM_OWNER_UID).collection("weeks").get();
+    for(const doc of legacy.docs){
+      const data=doc.data()||{};
+      await weeksRef().doc(doc.id).set({
+        ...data,
+        migratedFrom:"v5",
+        updatedBy:cloudUser?.email||CBSM_OWNER_UID
+      });
+    }
+  }catch(e){
+    console.warn("Migració v5",e);
+  }
+}
+
 async function syncAllLocalAndCloud(){
   if(!cloudReady||cloudSyncBusy||!weeksRef()) return;
   cloudSyncBusy=true;
@@ -700,17 +797,19 @@ async function syncAllLocalAndCloud(){
     snap.forEach(doc=>remote.set(doc.id,doc.data()||{}));
     const deleted=getDeletedWeeks();
 
-    // Process cloud documents against local versions/tombstones.
     for(const [key,data] of remote.entries()){
       const remoteTs=+(data.updatedAtMs||0);
       const deletedTs=+(deleted[key]||0);
+
       if(deletedTs && deletedTs>=remoteTs){
         await weeksRef().doc(key).delete();
         clearWeekDeleted(key);
         continue;
       }
+
       const localExists=localWeekExists(key);
       const localTs=localUpdatedAt(key);
+
       if(localExists && localTs>remoteTs){
         await cloudSaveWeek(key,localTs);
       }else if(!localExists || remoteTs>localTs){
@@ -718,7 +817,6 @@ async function syncAllLocalAndCloud(){
       }
     }
 
-    // Upload weeks that only exist locally.
     for(const key of getLocalWeekKeys()){
       if(deleted[key]) continue;
       if(!remote.has(key)){
@@ -728,7 +826,6 @@ async function syncAllLocalAndCloud(){
       }
     }
 
-    // Apply any remaining offline deletions.
     const deletedAfter=getDeletedWeeks();
     for(const [key,ts] of Object.entries(deletedAfter)){
       try{
@@ -747,13 +844,17 @@ async function syncAllLocalAndCloud(){
     cloudSyncBusy=false;
   }
 }
+
 function attachCloudListener(){
   if(cloudUnsubscribe){ try{cloudUnsubscribe();}catch(e){} cloudUnsubscribe=null; }
   if(!cloudReady||!weeksRef()) return;
+
   cloudUnsubscribe=weeksRef().onSnapshot(snap=>{
     let currentChanged=false, anyChanged=false;
+
     snap.docChanges().forEach(ch=>{
       const key=ch.doc.id;
+
       if(ch.type==="removed"){
         const deleted=getDeletedWeeks();
         if(!deleted[key]){
@@ -765,15 +866,18 @@ function attachCloudListener(){
         }
         return;
       }
+
       const data=ch.doc.data()||{};
       const remoteTs=+(data.updatedAtMs||0);
       const localTs=localUpdatedAt(key);
+
       if(remoteTs>localTs || !localWeekExists(key)){
         pullRemoteWeek(key,data);
         anyChanged=true;
         if(key===weekendKey) currentChanged=true;
       }
     });
+
     if(anyChanged){
       renderSavedWeeks();
       if(currentChanged) loadWeekend();
@@ -784,6 +888,7 @@ function attachCloudListener(){
     setCloudStatus("Núvol: connexió interrompuda","warn");
   });
 }
+
 async function loginCloud(){
   if(!fbAuth){
     setCloudStatus("Firebase encara no està preparat","warn");
@@ -795,59 +900,182 @@ async function loginCloud(){
     setCloudStatus("Introdueix correu i contrasenya","warn");
     return;
   }
+
   setCloudStatus("Núvol: iniciant sessió…");
   try{
-    const cred=await fbAuth.signInWithEmailAndPassword(email,password);
-    if(cred.user.uid!==CBSM_ALLOWED_UID){
-      await fbAuth.signOut();
-      setCloudStatus("Aquest usuari no té accés al quadrant","error");
-    }else{
-      const pw=document.getElementById("cloudPassword"); if(pw) pw.value="";
-    }
+    await fbAuth.signInWithEmailAndPassword(email,password);
+    const pw=document.getElementById("cloudPassword");
+    if(pw) pw.value="";
   }catch(e){
     console.error("loginCloud",e);
     setCloudStatus("No s'ha pogut entrar. Revisa correu i contrasenya.","error");
   }
 }
+
 async function logoutCloud(){
   if(fbAuth) await fbAuth.signOut();
 }
-async function manualCloudSync(){ await syncAllLocalAndCloud(); }
+
+async function manualCloudSync(){
+  await syncAllLocalAndCloud();
+}
+
+async function createClubUser(){
+  if(!cloudIsOwner||!fbDb){
+    setCloudStatus("Només l'administrador pot crear usuaris","error");
+    return;
+  }
+
+  const email=(document.getElementById("newUserEmail")?.value||"").trim();
+  const password=document.getElementById("newUserPassword")?.value||"";
+
+  if(!email || password.length<6){
+    setCloudStatus("Posa un correu i una contrasenya d'almenys 6 caràcters","warn");
+    return;
+  }
+
+  setCloudStatus("Creant usuari…");
+
+  let secondaryApp=null;
+  try{
+    secondaryApp=firebase.apps.find(a=>a.name==="CBSMUserCreator") ||
+      firebase.initializeApp(FIREBASE_CONFIG,"CBSMUserCreator");
+
+    const secondaryAuth=secondaryApp.auth();
+    const cred=await secondaryAuth.createUserWithEmailAndPassword(email,password);
+    const uid=cred.user.uid;
+
+    await membersRef().doc(uid).set({
+      email:email,
+      role:"editor",
+      createdAtMs:Date.now(),
+      createdBy:CBSM_OWNER_UID
+    });
+
+    try{ await secondaryAuth.signOut(); }catch(e){}
+
+    document.getElementById("newUserEmail").value="";
+    document.getElementById("newUserPassword").value="";
+    setCloudStatus("Usuari creat i autoritzat","ok");
+    await loadMembers();
+    alert("Usuari creat. Ja pot entrar amb aquest correu i la contrasenya que li has assignat.");
+  }catch(e){
+    console.error("createClubUser",e);
+    let msg="No s'ha pogut crear l'usuari.";
+    if(e?.code==="auth/email-already-in-use") msg="Aquest correu ja existeix a Firebase Authentication.";
+    if(e?.code==="auth/weak-password") msg="La contrasenya ha de tenir almenys 6 caràcters.";
+    if(e?.code==="auth/invalid-email") msg="El correu no és vàlid.";
+    setCloudStatus(msg,"error");
+  }
+}
+
+async function revokeClubUser(uid,email=""){
+  if(!cloudIsOwner||!membersRef()) return;
+  if(!confirm("Vols llevar l'accés a "+(email||"aquest usuari")+"?")) return;
+  try{
+    await membersRef().doc(uid).delete();
+    setCloudStatus("Accés revocat","ok");
+    await loadMembers();
+  }catch(e){
+    console.error("revokeClubUser",e);
+    setCloudStatus("No s'ha pogut revocar l'accés","error");
+  }
+}
+
+async function loadMembers(){
+  const box=document.getElementById("membersList");
+  if(!box||!cloudIsOwner||!membersRef()) return;
+
+  try{
+    const snap=await membersRef().get();
+    const rows=[
+      `<div class="memberRow">
+        <div class="memberInfo">
+          <div class="memberEmail">${cloudUser?.email||"Administrador"}</div>
+          <div class="memberMeta">Administrador principal</div>
+        </div>
+      </div>`
+    ];
+
+    snap.forEach(doc=>{
+      const d=doc.data()||{};
+      const email=d.email||doc.id;
+      rows.push(`<div class="memberRow">
+        <div class="memberInfo">
+          <div class="memberEmail">${escapeHtml(email)}</div>
+          <div class="memberMeta">Editor · ${escapeHtml(doc.id)}</div>
+        </div>
+        <button class="danger" type="button" onclick='revokeClubUser(${JSON.stringify(doc.id)},${JSON.stringify(email)})'>Revocar accés</button>
+      </div>`);
+    });
+
+    box.innerHTML=rows.join("");
+  }catch(e){
+    console.error("loadMembers",e);
+    box.innerHTML="<p class='small'>No s'ha pogut carregar la llista d'usuaris.</p>";
+  }
+}
+
+function escapeHtml(value){
+  return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
+}
 
 async function initFirebaseSync(){
   if(typeof firebase==="undefined"){
     setCloudStatus("Núvol no disponible. El guardat local continua actiu.","warn");
     return;
   }
+
   try{
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     fbAuth=firebase.auth();
     fbDb=firebase.firestore();
+
     try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+
     fbAuth.onAuthStateChanged(async user=>{
-      if(user && user.uid!==CBSM_ALLOWED_UID){
-        cloudReady=false; cloudUser=null; updateCloudUI(null);
-        setCloudStatus("Aquest usuari no té accés","error");
+      if(!user){
+        cloudReady=false;
+        cloudUser=null;
+        cloudIsOwner=false;
+        updateCloudUI(null);
+        if(cloudUnsubscribe){ try{cloudUnsubscribe();}catch(e){} cloudUnsubscribe=null; }
+        setCloudStatus("Núvol: inicia sessió per sincronitzar","warn");
+        return;
+      }
+
+      cloudIsOwner=user.uid===CBSM_OWNER_UID;
+      const allowed=await isAuthorizedUser(user);
+
+      if(!allowed){
+        cloudReady=false;
+        cloudUser=null;
+        cloudIsOwner=false;
+        updateCloudUI(null);
+        setCloudStatus("Aquest usuari no està autoritzat","error");
         try{await fbAuth.signOut();}catch(e){}
         return;
       }
-      cloudUser=user||null;
-      cloudReady=!!user;
+
+      cloudUser=user;
+      cloudReady=true;
       updateCloudUI(user);
-      if(user){
-        setCloudStatus("Núvol: connectant…");
-        await syncAllLocalAndCloud();
-        attachCloudListener();
-      }else{
-        if(cloudUnsubscribe){ try{cloudUnsubscribe();}catch(e){} cloudUnsubscribe=null; }
-        setCloudStatus("Núvol: inicia sessió per sincronitzar","warn");
+      setCloudStatus("Núvol: connectant…");
+
+      if(cloudIsOwner){
+        await migrateLegacyOwnerData();
+        await loadMembers();
       }
+
+      await syncAllLocalAndCloud();
+      attachCloudListener();
     });
   }catch(e){
     console.error("initFirebaseSync",e);
     setCloudStatus("No s'ha pogut iniciar Firebase. El guardat local continua actiu.","error");
   }
 }
+
 window.addEventListener("online",()=>{ if(cloudReady) syncAllLocalAndCloud(); });
 
 

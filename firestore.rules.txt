@@ -2,9 +2,33 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn() && request.auth.uid == "EY9wXGdbKONum3VvAIrXvaBJz0Z2";
+    }
+
+    function isMember() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/clubs/cbsm/members/$(request.auth.uid));
+    }
+
+    match /clubs/cbsm/weeks/{weekId} {
+      allow read, write: if isOwner() || isMember();
+    }
+
+    match /clubs/cbsm/members/{userId} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if isOwner();
+    }
+
+    // Només es manté temporalment perquè l'administrador pugui migrar
+    // automàticament les dades de la versió v5 a l'espai compartit.
     match /users/EY9wXGdbKONum3VvAIrXvaBJz0Z2/weeks/{weekId} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == "EY9wXGdbKONum3VvAIrXvaBJz0Z2";
+      allow read: if isOwner();
     }
   }
 }
