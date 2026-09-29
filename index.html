@@ -84,10 +84,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 <body>
 <header>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v3</span></h1>
+        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v4 mòbil</span></h1>
         <button id="installBtn" class="secondary noPrint" style="display:none">Instal·lar app</button>
       </div>
     </header>
+<div id="storageStatus" class="noPrint" style="font-size:12px;margin:6px 12px;color:#55606b">
+  Guardat del dispositiu: comprovant…
+</div>
+
 <main>
 <div class="panel noPrint">
 <h2>Setmana</h2>
@@ -232,6 +236,7 @@ function save(){
   renderList();
   refreshGenerated();
   renderSavedWeeks();
+  backupCBSMToIDB();
 }
 function toggleVenue(){
   const away=$("condicio").value==="Fora";
@@ -507,6 +512,7 @@ function importBackupFile(ev){
         localStorage.setItem("cbsm_week_schedule_"+key,JSON.stringify(val.schedule||[]));
       });
       renderSavedWeeks();
+      backupCBSMToIDB();
       alert("Còpia importada correctament.");
     }catch(e){alert("No s'ha pogut importar la còpia.");}
   };
@@ -514,10 +520,94 @@ function importBackupFile(ev){
   ev.target.value="";
 }
 
-init();
-toggleVenue();
-renderSavedWeeks();
+async function bootstrapCBSM(){
+  await requestPersistentStorage();
+  await restoreCBSMFromIDB();
+  init();
+  toggleVenue();
+  renderSavedWeeks();
+  backupCBSMToIDB();
+}
+bootstrapCBSM();
 
+
+
+const CBSM_DB_NAME="cbsm_quadrant_db";
+const CBSM_DB_STORE="kv";
+
+function openCBSMDB(){
+  return new Promise((resolve,reject)=>{
+    if(!("indexedDB" in window)){ reject(new Error("IndexedDB no disponible")); return; }
+    const req=indexedDB.open(CBSM_DB_NAME,1);
+    req.onupgradeneeded=()=>{
+      if(!req.result.objectStoreNames.contains(CBSM_DB_STORE)){
+        req.result.createObjectStore(CBSM_DB_STORE);
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function idbSet(key,value){
+  const db=await openCBSMDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(CBSM_DB_STORE,"readwrite");
+    tx.objectStore(CBSM_DB_STORE).put(value,key);
+    tx.oncomplete=()=>{db.close();resolve();};
+    tx.onerror=()=>{db.close();reject(tx.error);};
+  });
+}
+async function idbGet(key){
+  const db=await openCBSMDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(CBSM_DB_STORE,"readonly");
+    const req=tx.objectStore(CBSM_DB_STORE).get(key);
+    req.onsuccess=()=>{db.close();resolve(req.result);};
+    req.onerror=()=>{db.close();reject(req.error);};
+  });
+}
+function updateStorageStatus(ok){
+  const el=document.getElementById("storageStatus");
+  if(!el) return;
+  el.textContent=ok ? "Guardat del dispositiu: actiu" : "Guardat del dispositiu: mode compatible";
+}
+async function backupCBSMToIDB(){
+  try{
+    const data={};
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k && k.startsWith("cbsm_")){
+        data[k]=localStorage.getItem(k);
+      }
+    }
+    await idbSet("snapshot",data);
+    updateStorageStatus(true);
+  }catch(e){
+    updateStorageStatus(false);
+  }
+}
+async function restoreCBSMFromIDB(){
+  try{
+    const data=await idbGet("snapshot");
+    if(data && typeof data==="object"){
+      Object.entries(data).forEach(([k,v])=>{
+        if(k.startsWith("cbsm_") && v!==null){
+          localStorage.setItem(k,v);
+        }
+      });
+    }
+    updateStorageStatus(true);
+  }catch(e){
+    updateStorageStatus(false);
+  }
+}
+async function requestPersistentStorage(){
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      await navigator.storage.persist();
+    }
+  }catch(e){}
+}
 
 function persistCurrentWeek(){
   try{
@@ -525,6 +615,7 @@ function persistCurrentWeek(){
       localStorage.setItem(CBSM_CURRENT_WEEK_KEY, weekendKey);
     }
   }catch(e){}
+  backupCBSMToIDB();
 }
 window.addEventListener("pagehide",persistCurrentWeek);
 window.addEventListener("beforeunload",persistCurrentWeek);
