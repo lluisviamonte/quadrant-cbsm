@@ -84,7 +84,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 <body>
 <header>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <h1>Quadrant de partits · CB Santa Maria</h1>
+        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v3</span></h1>
         <button id="installBtn" class="secondary noPrint" style="display:none">Instal·lar app</button>
       </div>
     </header>
@@ -178,6 +178,7 @@ const teams=[
 ["FEMENÍ +40","SERVEIS GRÀFICS ESTARELLAS"],
 ["VETERANS LLIGA ADAIB","BAR CAN BEIA - CONSTRUMAPH"],
 ["ESCOLETA","ESCOLETA CBSM"]];
+const CBSM_CURRENT_WEEK_KEY="cbsm_current_week";
 let weekendKey="";
 let games=[];
 function mondayOf(dateStr){
@@ -199,19 +200,35 @@ function loadWeekend(){
   $("weekendLabel").textContent="Setmana: "+f.toLocaleDateString("ca-ES")+" – "+su.toLocaleDateString("ca-ES");
   renderList(); refreshGenerated(); renderSavedWeeks();
 }
-function selectWeekend(){weekendKey=mondayOf($("weekendDate").value);loadWeekend()}
-function newWeekend(){weekendKey=mondayOf($("weekendDate").value||new Date().toISOString().slice(0,10));loadWeekend()}
+function selectWeekend(){
+  weekendKey=mondayOf($("weekendDate").value);
+  try{localStorage.setItem(CBSM_CURRENT_WEEK_KEY,weekendKey);}catch(e){}
+  loadWeekend();
+}
+function newWeekend(){
+  weekendKey=mondayOf($("weekendDate").value||new Date().toISOString().slice(0,10));
+  try{localStorage.setItem(CBSM_CURRENT_WEEK_KEY,weekendKey);}catch(e){}
+  loadWeekend();
+}
 const $=id=>document.getElementById(id), mins=t=>{let [h,m]=t.split(":").map(Number);return h*60+m},
 fmt=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"),
 round30=m=>Math.ceil(m/30)*30;
 function init(){
  $("equip").innerHTML=teams.map((x,i)=>`<option value="${i}">${x[1]}</option>`).join("");
- weekendKey=mondayOf(new Date().toISOString().slice(0,10));
+ let remembered="";
+ try{remembered=localStorage.getItem(CBSM_CURRENT_WEEK_KEY)||"";}catch(e){}
+ weekendKey=remembered || mondayOf(new Date().toISOString().slice(0,10));
+ try{localStorage.setItem(CBSM_CURRENT_WEEK_KEY,weekendKey);}catch(e){}
  loadWeekend();
 }
 function showTab(id,b){document.querySelectorAll("section").forEach(x=>x.classList.add("hidden"));$(id).classList.remove("hidden");document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));if(b)b.classList.add("active")}
 function save(){
-  localStorage.setItem(storageKey(),JSON.stringify(games));
+  try{
+    localStorage.setItem(storageKey(),JSON.stringify(games));
+    localStorage.setItem(CBSM_CURRENT_WEEK_KEY,weekendKey);
+  }catch(e){
+    alert("No s'han pogut guardar les dades al dispositiu.");
+  }
   renderList();
   refreshGenerated();
   renderSavedWeeks();
@@ -450,6 +467,7 @@ function renderSavedWeeks(){
 }
 function openSavedWeek(key){
   weekendKey=key;
+  try{localStorage.setItem(CBSM_CURRENT_WEEK_KEY,key);}catch(e){}
   loadWeekend();
   $("weekendDate").value=key;
   showTab("partits",document.querySelectorAll(".tabs button")[0]);
@@ -499,6 +517,20 @@ function importBackupFile(ev){
 init();
 toggleVenue();
 renderSavedWeeks();
+
+
+function persistCurrentWeek(){
+  try{
+    if(typeof weekendKey!=="undefined" && weekendKey){
+      localStorage.setItem(CBSM_CURRENT_WEEK_KEY, weekendKey);
+    }
+  }catch(e){}
+}
+window.addEventListener("pagehide",persistCurrentWeek);
+window.addEventListener("beforeunload",persistCurrentWeek);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden") persistCurrentWeek();
+});
 
 let deferredInstallPrompt=null;
 window.addEventListener("beforeinstallprompt",(e)=>{
