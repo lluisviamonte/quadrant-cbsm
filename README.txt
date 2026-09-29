@@ -1,10 +1,19 @@
-QUADRANT CBSM v4 MÒBIL
+QUADRANT CBSM v5 SINCRONITZADA
 
-Millores:
-- localStorage + còpia automàtica a IndexedDB
-- restauració automàtica en tornar a obrir
-- petició d'emmagatzematge persistent quan el navegador ho permet
-- memòria cau renovada perquè el mòbil carregui aquesta versió
+Aquesta versió manté GitHub Pages com a app i utilitza Firebase per sincronitzar dades.
 
-Puja tots els fitxers al repositori de GitHub Pages i substitueix els anteriors.
-Quan estigui actualitzat, al títol de l'app ha d'aparèixer “v4 mòbil”.
+PASSOS:
+1. Puja tots els fitxers d'aquesta carpeta al repositori de GitHub Pages i substitueix els anteriors.
+2. A Firebase > Firestore Database > Reglas, copia el contingut de firestore.rules.txt i prem Publicar.
+3. Obre l'app al PC i inicia sessió amb l'usuari que has creat a Firebase Authentication.
+4. Obre l'app a l'iPhone i inicia sessió amb el mateix usuari.
+5. A partir d'aquí, les setmanes i els partits se sincronitzen entre els dos dispositius.
+
+UID autoritzat:
+EY9wXGdbKONum3VvAIrXvaBJz0Z2
+
+NOTES:
+- La contrasenya no queda escrita dins l'app.
+- Firebase Authentication recorda la sessió al dispositiu quan el navegador ho permet.
+- El guardat local continua funcionant com a còpia/offline.
+- Si no hi ha internet, els canvis queden locals i l'app intenta sincronitzar quan torna la connexió.

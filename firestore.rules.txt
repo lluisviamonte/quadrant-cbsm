@@ -1,0 +1,10 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/EY9wXGdbKONum3VvAIrXvaBJz0Z2/weeks/{weekId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == "EY9wXGdbKONum3VvAIrXvaBJz0Z2";
+    }
+  }
+}

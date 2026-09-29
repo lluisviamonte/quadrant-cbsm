@@ -71,6 +71,22 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
   th,td{padding:6px}
 }
 
+
+.cloudPanel{margin-top:10px}
+.cloudTop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cloudLogin,.cloudLogged{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cloudLogin input{min-width:210px;flex:1}
+.cloudLogged{justify-content:space-between}
+.cloudOk{color:#19733b}
+.cloudWarn{color:#9b6500}
+.cloudError{color:#a12622}
+@media(max-width:700px){
+  .cloudLogin{display:grid;grid-template-columns:1fr}
+  .cloudLogin input,.cloudLogin button{width:100%}
+  .cloudLogged{align-items:stretch}
+  .cloudLogged button{width:100%}
+}
+
 </style>
 
 <link rel="manifest" href="manifest.json">
@@ -80,11 +96,17 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 <meta name="apple-mobile-web-app-title" content="Quadrant CBSM">
 <link rel="apple-touch-icon" href="icon-192.png">
 
+
+<!-- Firebase: Authentication + Cloud Firestore -->
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+
 </head>
 <body>
 <header>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v4 mòbil</span></h1>
+        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v5 sincronitzada</span></h1>
         <button id="installBtn" class="secondary noPrint" style="display:none">Instal·lar app</button>
       </div>
     </header>
@@ -93,6 +115,26 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 </div>
 
 <main>
+
+<div class="panel noPrint cloudPanel">
+  <div class="cloudTop">
+    <div>
+      <strong>Sincronització PC ↔ iPhone</strong>
+      <div id="cloudStatus" class="small">Núvol: preparant…</div>
+    </div>
+    <button id="syncNowBtn" class="secondary" type="button" onclick="manualCloudSync()" style="display:none">Sincronitzar ara</button>
+  </div>
+  <div id="cloudLogin" class="cloudLogin">
+    <input id="cloudEmail" type="email" autocomplete="email" placeholder="Correu de Firebase">
+    <input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Contrasenya">
+    <button class="primary" type="button" onclick="loginCloud()">Entrar</button>
+  </div>
+  <div id="cloudLogged" class="cloudLogged" style="display:none">
+    <span id="cloudUser"></span>
+    <button class="secondary" type="button" onclick="logoutCloud()">Tancar sessió</button>
+  </div>
+</div>
+
 <div class="panel noPrint">
 <h2>Setmana</h2>
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
@@ -227,9 +269,12 @@ function init(){
 }
 function showTab(id,b){document.querySelectorAll("section").forEach(x=>x.classList.add("hidden"));$(id).classList.remove("hidden");document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));if(b)b.classList.add("active")}
 function save(){
+  const updatedAt=Date.now();
   try{
     localStorage.setItem(storageKey(),JSON.stringify(games));
     localStorage.setItem(CBSM_CURRENT_WEEK_KEY,weekendKey);
+    localStorage.setItem(updatedKey(weekendKey),String(updatedAt));
+    clearWeekDeleted(weekendKey);
   }catch(e){
     alert("No s'han pogut guardar les dades al dispositiu.");
   }
@@ -237,6 +282,7 @@ function save(){
   refreshGenerated();
   renderSavedWeeks();
   backupCBSMToIDB();
+  cloudSaveWeek(weekendKey,updatedAt);
 }
 function toggleVenue(){
   const away=$("condicio").value==="Fora";
@@ -479,13 +525,17 @@ function openSavedWeek(key){
 }
 function deleteSavedWeek(key){
   if(!confirm("Vols eliminar aquesta setmana guardada?")) return;
+  const deletedAt=markWeekDeleted(key);
   localStorage.removeItem("cbsm_week_games_"+key);
   localStorage.removeItem("cbsm_week_schedule_"+key);
+  localStorage.removeItem(updatedKey(key));
   if(weekendKey===key){
     games=[];
     renderList(); refreshGenerated();
   }
   renderSavedWeeks();
+  backupCBSMToIDB();
+  cloudDeleteWeek(key,deletedAt);
 }
 function exportBackup(){
   const data={version:1,weeks:{}};
@@ -510,15 +560,296 @@ function importBackupFile(ev){
       Object.entries(data.weeks).forEach(([key,val])=>{
         localStorage.setItem("cbsm_week_games_"+key,JSON.stringify(val.games||[]));
         localStorage.setItem("cbsm_week_schedule_"+key,JSON.stringify(val.schedule||[]));
+        localStorage.setItem(updatedKey(key),String(Date.now()));
+        clearWeekDeleted(key);
       });
       renderSavedWeeks();
       backupCBSMToIDB();
+      if(cloudReady) syncAllLocalAndCloud();
       alert("Còpia importada correctament.");
     }catch(e){alert("No s'ha pogut importar la còpia.");}
   };
   r.readAsText(file);
   ev.target.value="";
 }
+
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAGToQvmsyScZhqbnkzUWaMoM7XkI30HTo",
+  authDomain: "quadrant-cb-santa-maria.firebaseapp.com",
+  projectId: "quadrant-cb-santa-maria",
+  storageBucket: "quadrant-cb-santa-maria.firebasestorage.app",
+  messagingSenderId: "186598747227",
+  appId: "1:186598747227:web:5fc8ec8e3f6b4ecaa1a37e",
+  measurementId: "G-L24SNSY15W"
+};
+const CBSM_ALLOWED_UID = "EY9wXGdbKONum3VvAIrXvaBJz0Z2";
+const CBSM_DELETED_WEEKS_KEY = "cbsm_deleted_weeks";
+
+let fbAuth=null, fbDb=null, cloudUser=null, cloudReady=false, cloudUnsubscribe=null;
+let cloudSyncBusy=false;
+
+function updatedKey(key){ return "cbsm_week_updated_"+key; }
+function localWeekExists(key){ return localStorage.getItem("cbsm_week_games_"+key)!==null; }
+function localUpdatedAt(key){ return +(localStorage.getItem(updatedKey(key))||0); }
+function markLocalUpdated(key, ts=Date.now()){
+  try{ localStorage.setItem(updatedKey(key), String(ts)); }catch(e){}
+  return ts;
+}
+function getDeletedWeeks(){
+  try{ return JSON.parse(localStorage.getItem(CBSM_DELETED_WEEKS_KEY)||"{}")||{}; }
+  catch(e){ return {}; }
+}
+function setDeletedWeeks(obj){
+  try{ localStorage.setItem(CBSM_DELETED_WEEKS_KEY,JSON.stringify(obj)); }catch(e){}
+}
+function markWeekDeleted(key, ts=Date.now()){
+  const d=getDeletedWeeks(); d[key]=ts; setDeletedWeeks(d); return ts;
+}
+function clearWeekDeleted(key){
+  const d=getDeletedWeeks();
+  if(Object.prototype.hasOwnProperty.call(d,key)){ delete d[key]; setDeletedWeeks(d); }
+}
+function setCloudStatus(text, kind=""){
+  const el=document.getElementById("cloudStatus");
+  if(!el) return;
+  el.textContent=text;
+  el.className="small "+(kind==="ok"?"cloudOk":kind==="warn"?"cloudWarn":kind==="error"?"cloudError":"");
+}
+function updateCloudUI(user){
+  const login=document.getElementById("cloudLogin");
+  const logged=document.getElementById("cloudLogged");
+  const syncBtn=document.getElementById("syncNowBtn");
+  const userEl=document.getElementById("cloudUser");
+  if(!login||!logged) return;
+  if(user && user.uid===CBSM_ALLOWED_UID){
+    login.style.display="none";
+    logged.style.display="flex";
+    if(syncBtn) syncBtn.style.display="inline-block";
+    if(userEl) userEl.textContent=user.email||"Usuari CBSM";
+  }else{
+    login.style.display="flex";
+    logged.style.display="none";
+    if(syncBtn) syncBtn.style.display="none";
+    if(userEl) userEl.textContent="";
+  }
+}
+function weeksRef(){
+  if(!fbDb||!cloudUser) return null;
+  return fbDb.collection("users").doc(cloudUser.uid).collection("weeks");
+}
+function cloudWeekPayload(key, ts){
+  let g=[], sch=[];
+  try{ g=JSON.parse(localStorage.getItem("cbsm_week_games_"+key)||"[]"); }catch(e){}
+  try{ sch=JSON.parse(localStorage.getItem("cbsm_week_schedule_"+key)||"[]"); }catch(e){}
+  return {weekKey:key,games:g,schedule:sch,updatedAtMs:ts||localUpdatedAt(key)||Date.now()};
+}
+async function cloudSaveWeek(key, ts=null){
+  if(!cloudReady||!weeksRef()) return false;
+  const when=ts||localUpdatedAt(key)||markLocalUpdated(key);
+  try{
+    await weeksRef().doc(key).set(cloudWeekPayload(key,when));
+    clearWeekDeleted(key);
+    setCloudStatus("Núvol: sincronitzat","ok");
+    return true;
+  }catch(e){
+    console.error("cloudSaveWeek",e);
+    setCloudStatus("Núvol: pendent de sincronitzar","warn");
+    return false;
+  }
+}
+async function cloudDeleteWeek(key, ts=null){
+  if(!cloudReady||!weeksRef()) return false;
+  try{
+    await weeksRef().doc(key).delete();
+    clearWeekDeleted(key);
+    setCloudStatus("Núvol: sincronitzat","ok");
+    return true;
+  }catch(e){
+    console.error("cloudDeleteWeek",e);
+    markWeekDeleted(key,ts||Date.now());
+    setCloudStatus("Núvol: eliminació pendent","warn");
+    return false;
+  }
+}
+function pullRemoteWeek(key, data){
+  const ts=+(data.updatedAtMs||0);
+  try{
+    localStorage.setItem("cbsm_week_games_"+key,JSON.stringify(Array.isArray(data.games)?data.games:[]));
+    localStorage.setItem("cbsm_week_schedule_"+key,JSON.stringify(Array.isArray(data.schedule)?data.schedule:[]));
+    localStorage.setItem(updatedKey(key),String(ts));
+    clearWeekDeleted(key);
+  }catch(e){}
+}
+function getLocalWeekKeys(){
+  const prefix="cbsm_week_games_";
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k&&k.startsWith(prefix)) keys.push(k.slice(prefix.length));
+  }
+  return [...new Set(keys)].sort();
+}
+async function syncAllLocalAndCloud(){
+  if(!cloudReady||cloudSyncBusy||!weeksRef()) return;
+  cloudSyncBusy=true;
+  setCloudStatus("Núvol: sincronitzant…");
+  try{
+    const snap=await weeksRef().get();
+    const remote=new Map();
+    snap.forEach(doc=>remote.set(doc.id,doc.data()||{}));
+    const deleted=getDeletedWeeks();
+
+    // Process cloud documents against local versions/tombstones.
+    for(const [key,data] of remote.entries()){
+      const remoteTs=+(data.updatedAtMs||0);
+      const deletedTs=+(deleted[key]||0);
+      if(deletedTs && deletedTs>=remoteTs){
+        await weeksRef().doc(key).delete();
+        clearWeekDeleted(key);
+        continue;
+      }
+      const localExists=localWeekExists(key);
+      const localTs=localUpdatedAt(key);
+      if(localExists && localTs>remoteTs){
+        await cloudSaveWeek(key,localTs);
+      }else if(!localExists || remoteTs>localTs){
+        pullRemoteWeek(key,data);
+      }
+    }
+
+    // Upload weeks that only exist locally.
+    for(const key of getLocalWeekKeys()){
+      if(deleted[key]) continue;
+      if(!remote.has(key)){
+        let ts=localUpdatedAt(key);
+        if(!ts) ts=markLocalUpdated(key);
+        await cloudSaveWeek(key,ts);
+      }
+    }
+
+    // Apply any remaining offline deletions.
+    const deletedAfter=getDeletedWeeks();
+    for(const [key,ts] of Object.entries(deletedAfter)){
+      try{
+        await weeksRef().doc(key).delete();
+        clearWeekDeleted(key);
+      }catch(e){}
+    }
+
+    renderSavedWeeks();
+    if(weekendKey && localWeekExists(weekendKey)) loadWeekend();
+    setCloudStatus("Núvol: sincronitzat","ok");
+  }catch(e){
+    console.error("syncAllLocalAndCloud",e);
+    setCloudStatus("Núvol: error de sincronització","error");
+  }finally{
+    cloudSyncBusy=false;
+  }
+}
+function attachCloudListener(){
+  if(cloudUnsubscribe){ try{cloudUnsubscribe();}catch(e){} cloudUnsubscribe=null; }
+  if(!cloudReady||!weeksRef()) return;
+  cloudUnsubscribe=weeksRef().onSnapshot(snap=>{
+    let currentChanged=false, anyChanged=false;
+    snap.docChanges().forEach(ch=>{
+      const key=ch.doc.id;
+      if(ch.type==="removed"){
+        const deleted=getDeletedWeeks();
+        if(!deleted[key]){
+          localStorage.removeItem("cbsm_week_games_"+key);
+          localStorage.removeItem("cbsm_week_schedule_"+key);
+          localStorage.removeItem(updatedKey(key));
+          anyChanged=true;
+          if(key===weekendKey) currentChanged=true;
+        }
+        return;
+      }
+      const data=ch.doc.data()||{};
+      const remoteTs=+(data.updatedAtMs||0);
+      const localTs=localUpdatedAt(key);
+      if(remoteTs>localTs || !localWeekExists(key)){
+        pullRemoteWeek(key,data);
+        anyChanged=true;
+        if(key===weekendKey) currentChanged=true;
+      }
+    });
+    if(anyChanged){
+      renderSavedWeeks();
+      if(currentChanged) loadWeekend();
+    }
+    setCloudStatus("Núvol: sincronitzat","ok");
+  },err=>{
+    console.error("cloud listener",err);
+    setCloudStatus("Núvol: connexió interrompuda","warn");
+  });
+}
+async function loginCloud(){
+  if(!fbAuth){
+    setCloudStatus("Firebase encara no està preparat","warn");
+    return;
+  }
+  const email=(document.getElementById("cloudEmail")?.value||"").trim();
+  const password=document.getElementById("cloudPassword")?.value||"";
+  if(!email||!password){
+    setCloudStatus("Introdueix correu i contrasenya","warn");
+    return;
+  }
+  setCloudStatus("Núvol: iniciant sessió…");
+  try{
+    const cred=await fbAuth.signInWithEmailAndPassword(email,password);
+    if(cred.user.uid!==CBSM_ALLOWED_UID){
+      await fbAuth.signOut();
+      setCloudStatus("Aquest usuari no té accés al quadrant","error");
+    }else{
+      const pw=document.getElementById("cloudPassword"); if(pw) pw.value="";
+    }
+  }catch(e){
+    console.error("loginCloud",e);
+    setCloudStatus("No s'ha pogut entrar. Revisa correu i contrasenya.","error");
+  }
+}
+async function logoutCloud(){
+  if(fbAuth) await fbAuth.signOut();
+}
+async function manualCloudSync(){ await syncAllLocalAndCloud(); }
+
+async function initFirebaseSync(){
+  if(typeof firebase==="undefined"){
+    setCloudStatus("Núvol no disponible. El guardat local continua actiu.","warn");
+    return;
+  }
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth=firebase.auth();
+    fbDb=firebase.firestore();
+    try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+    fbAuth.onAuthStateChanged(async user=>{
+      if(user && user.uid!==CBSM_ALLOWED_UID){
+        cloudReady=false; cloudUser=null; updateCloudUI(null);
+        setCloudStatus("Aquest usuari no té accés","error");
+        try{await fbAuth.signOut();}catch(e){}
+        return;
+      }
+      cloudUser=user||null;
+      cloudReady=!!user;
+      updateCloudUI(user);
+      if(user){
+        setCloudStatus("Núvol: connectant…");
+        await syncAllLocalAndCloud();
+        attachCloudListener();
+      }else{
+        if(cloudUnsubscribe){ try{cloudUnsubscribe();}catch(e){} cloudUnsubscribe=null; }
+        setCloudStatus("Núvol: inicia sessió per sincronitzar","warn");
+      }
+    });
+  }catch(e){
+    console.error("initFirebaseSync",e);
+    setCloudStatus("No s'ha pogut iniciar Firebase. El guardat local continua actiu.","error");
+  }
+}
+window.addEventListener("online",()=>{ if(cloudReady) syncAllLocalAndCloud(); });
+
 
 async function bootstrapCBSM(){
   await requestPersistentStorage();
@@ -527,6 +858,7 @@ async function bootstrapCBSM(){
   toggleVenue();
   renderSavedWeeks();
   backupCBSMToIDB();
+  await initFirebaseSync();
 }
 bootstrapCBSM();
 
