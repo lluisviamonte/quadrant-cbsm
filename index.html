@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quadrant CBSM</title>
+<style>
+:root{--blue:#4f94cc;--green:#dfeeda;--orange:#fff0cc;--line:#c8c8c8;--bg:#f5f7fa}
+*{box-sizing:border-box} body{font-family:Arial,sans-serif;margin:0;background:var(--bg);color:#17202a}
+header{background:#1f4e78;color:#fff;padding:18px 22px} header h1{margin:0;font-size:22px}
+main{max-width:1450px;margin:auto;padding:18px}.tabs{display:flex;gap:8px;margin-bottom:14px}
+button,.btn{border:0;border-radius:7px;padding:10px 14px;cursor:pointer;font-weight:700}
+.tabs button{background:#dde5ec}.tabs button.active,.primary{background:#1f4e78;color:white}.secondary{background:#e8edf2}
+.panel{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 5px #0001;margin-bottom:16px}
+.hidden{display:none}.formgrid{display:grid;grid-template-columns:repeat(8,minmax(120px,1fr));gap:10px;align-items:end}
+label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select{width:100%;padding:9px;border:1px solid #bbb;border-radius:6px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #d6d6d6;padding:7px;text-align:left}th{background:#eef3f7}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.danger{background:#b33;color:#fff}
+.dayTitle{background:var(--blue);color:#fff;text-align:center;font-weight:700;padding:7px;border:1px solid #7ca7c9}
+.schedule{display:grid;grid-template-columns:80px 1fr 1fr;position:relative;border-left:1px solid var(--line);border-top:1px solid var(--line)}
+.head{font-weight:700;text-align:center;background:#eef3f7;padding:8px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.time{height:34px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;text-align:center;font-size:12px}
+.lane{position:relative;border-right:1px solid var(--line);background:repeating-linear-gradient(to bottom,#fff 0,#fff 33px,var(--line) 33px,var(--line) 34px)}
+.game{position:absolute;left:3px;right:3px;border:1px solid #9eb993;border-radius:4px;background:var(--green);padding:7px;text-align:center;overflow:hidden;font-size:12px;z-index:2}
+.game.exterior{background:var(--orange);border-color:#d4bd86}.game b{display:block;margin-bottom:3px}
+.small{font-size:12px;color:#59636d}.warning{color:#a33;font-weight:700}.ok{color:#286a34;font-weight:700}
+@media(max-width:900px){.formgrid{grid-template-columns:1fr 1fr}.schedule{grid-template-columns:62px 1fr 1fr}}
+@media print{header,.tabs,#partits,.actions,.noPrint{display:none!important}main{padding:0;max-width:none}.panel{box-shadow:none;padding:0}.schedule{break-inside:avoid}}
+
+.posterTitle{font-size:34px;font-weight:800;text-align:center;margin:8px 0 18px}
+.posterGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.fixtureTable{width:100%;border-collapse:collapse;table-layout:fixed}
+.fixtureTable td{border:1px solid #555;padding:8px 10px;text-align:center;height:58px;font-size:14px}
+.fixtureTable .teamCell{color:#fff;text-align:left;width:38%;font-weight:700}
+.fixtureTable .teamCell.fem{background:#a80f55}
+.fixtureTable .teamCell.masc{background:#3aaa35}
+.fixtureTable .teamCell.school{background:#111}
+.fixtureTable .teamCell .sponsor{display:block;font-size:11px;font-weight:400;margin-top:2px}
+.fixtureTable .homeGame{background:#dcebd0}
+.fixtureTable .awayGame{background:#f2c6b4}
+.fixtureTable .emptyGame{background:#fff}
+.legend{display:flex;gap:18px;justify-content:center;margin:10px 0 18px;font-size:12px}
+.legend span:before{content:"";display:inline-block;width:14px;height:14px;margin-right:6px;vertical-align:-2px;border:1px solid #999}
+.legend .lgHome:before{background:#dcebd0}.legend .lgAway:before{background:#f2c6b4}
+@media(max-width:1000px){.posterGrid{grid-template-columns:1fr}.posterTitle{font-size:26px}}
+@media print{
+  #cartell .actions{display:none!important}
+  .posterTitle{font-size:28px}
+  .fixtureTable td{height:48px;font-size:12px}
+}
+
+
+.savedWeek{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #d6dce2;border-radius:8px;margin:7px 0;background:#fafcfd}
+.savedWeek strong{display:block}.savedWeek .meta{font-size:12px;color:#65707a;margin-top:2px}
+.savedWeek .weekBtns{display:flex;gap:6px;flex-wrap:wrap}
+.savedWeek button{padding:7px 10px}
+
+
+@media(max-width:700px){
+  header{padding:14px 12px}
+  header h1{font-size:18px}
+  main{padding:10px}
+  .panel{padding:12px}
+  .tabs{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0}
+  .tabs button{flex:1;min-width:0;padding:10px 6px;font-size:12px}
+  button,.btn{min-height:42px}
+  input,select{min-height:42px;font-size:16px}
+  .formgrid{grid-template-columns:1fr}
+  .formgrid > div{grid-column:span 1 !important}
+  table{font-size:11px}
+  th,td{padding:6px}
+}
+
+</style>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f4e78">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Quadrant CBSM">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+</head>
+<body>
+<header>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <h1>Quadrant de partits · CB Santa Maria</h1>
+        <button id="installBtn" class="secondary noPrint" style="display:none">Instal·lar app</button>
+      </div>
+    </header>
+<main>
+<div class="panel noPrint">
+<h2>Setmana</h2>
+<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+<div><label>Qualsevol dia de la setmana</label><input id="weekendDate" type="date"></div>
+<button class="primary" onclick="selectWeekend()">Carregar setmana</button>
+<button class="secondary" onclick="newWeekend()">Nova setmana</button>
+</div>
+<p class="small" id="weekendLabel"></p>
+</div>
+
+<div class="panel noPrint">
+<h2>Setmanes guardades</h2>
+<div id="savedWeeks"></div>
+<div class="actions">
+<button class="secondary" onclick="exportBackup()">Exportar còpia de seguretat</button>
+<label class="btn secondary" style="display:inline-block">
+Importar còpia
+<input id="importBackup" type="file" accept=".json,application/json" style="display:none" onchange="importBackupFile(event)">
+</label>
+</div>
+<p class="small">Les setmanes es guarden automàticament en aquest navegador. La còpia de seguretat et permet recuperar-les si canvies d'ordinador o esborres les dades del navegador.</p>
+</div>
+<div class="tabs noPrint">
+<button class="active" onclick="showTab('partits',this)">Partits</button>
+<button onclick="refreshGenerated();showTab('quadrant',this)">Ocupació pistes</button>
+<button onclick="refreshGenerated();showTab('cartell',this)">Partits de la setmana</button>
+</div>
+
+<section id="partits">
+<div class="panel">
+<h2>Afegir partit</h2>
+<div class="formgrid">
+<div><label>Dia</label><select id="dia"><option>Dilluns</option><option>Dimarts</option><option>Dimecres</option><option>Dijous</option><option selected>Divendres</option><option>Dissabte</option><option>Diumenge</option></select></div>
+<div style="grid-column:span 2"><label>El nostre equip</label><select id="equip"></select></div>
+<div><label>Casa / Fora</label><select id="condicio" onchange="toggleVenue()"><option>Casa</option><option>Fora</option></select></div>
+<div style="grid-column:span 2"><label>Rival</label><input id="visitant" placeholder="Ex. La Salle"></div>
+<div><label>Durada (min)</label><input id="durada" type="number" value="90" step="15" min="30"></div>
+<div><label>Pista (només casa)</label><select id="pista"><option>Automàtica</option><option>Interior</option><option>Exterior</option></select></div>
+<div><label>Hora</label><input id="minima" type="time" value="09:00" step="1800"></div>
+<div style="grid-column:span 2"><label>Lloc (només fora)</label><input id="lloc" placeholder="Ex. Alcúdia" disabled></div>
+</div>
+<div class="actions"><button class="primary" onclick="addGame()">Afegir partit</button><button class="secondary" onclick="generate()">Generar quadrants</button><button class="secondary" onclick="clearGames()">Buidar partits</button></div>
+<p class="small">De dilluns a divendres l'aplicació no programarà abans de les 17:00. Dissabte i diumenge comencen a les 09:00. Les hores s'ajusten a franges de 30 minuts.</p>
+</div>
+<div class="panel"><h2>Llista de partits</h2><div id="list"></div></div>
+</section>
+
+<section id="quadrant" class="hidden">
+<div class="panel">
+<div class="actions noPrint"><button class="primary" onclick="window.print()">Imprimir / Guardar PDF</button><button class="secondary" onclick="showTab('partits',document.querySelector('.tabs button'))">Editar partits</button></div>
+<div id="status"></div><div id="boards"></div>
+</div>
+</section>
+
+<section id="cartell" class="hidden">
+<div class="panel">
+<div class="actions noPrint">
+<button class="primary" onclick="window.print()">Imprimir / Guardar PDF</button>
+<button class="secondary" onclick="showTab('partits',document.querySelectorAll('.tabs button')[0])">Editar partits</button>
+</div>
+<div id="posterTitle" class="posterTitle"></div>
+<div class="legend"><span class="lgHome">Partit a casa</span><span class="lgAway">Partit a fora</span></div>
+<div id="posterBoards"></div>
+</div>
+</section>
+
+</main>
+<script>
+const teams=[
+["CADET FEMENÍ","CB SANTA MARIA ENGEL&VÖLKERS MALLORCA CENTRAL"],
+["CADET MASCULÍ","CB SANTA MARIA VERD DENTAL SANTA MARIA A"],
+["CADET MASCULÍ","CB SANTA MARIA NEGRE CELLER SA SINI B"],
+["JUNIOR MASCULÍ INTERILLES","CBSM ILLES CONTROL"],
+["INFANTIL FEMENÍ","CB SANTA MARIA VERD ENGEL&VÖLKERS MALLORCA CENTRAL A"],
+["INFANTIL FEMENÍ","CB SANTA MARIA NEGRE LABO'LIFE B"],
+["LLIGA INSULAR MASCULÍ","BIP BIP SUPERMERCATS CBSM"],
+["LLIGA INSULAR FEMENÍ","BOJOS PER LA CUINA CBSM"],
+["MINI FEMENÍ","CB SANTA MARIA NEGRE ILLA BEACH HOTELS B"],
+["MINI FEMENÍ","CB SANTA MARIA VERD FLORISTERIA ES BROT A"],
+["MINI MASCULÍ","CB SANTA MARIA GERRERIA SERRA"],
+["JUNIOR FEMENÍ INTERILLES","CBSM ENGEL & VÖLKERS MALLORCA CENTRA"],
+["PREMINI","CB SANTA MARIA VERD MASC A"],["PREMINI","CB SANTA MARIA NEGRE MASC B"],
+["PREMINI","CB SANTA MARIA VERD FEM A"],["PREMINI","CB SANTA MARIA NEGRE FEM B"],
+["INFANTIL MASCULÍ","CB SANTA MARIA VERD CELLER SEBASTIA PASTOR A"],
+["INFANTIL MASCULÍ","CB SANTA MARIA NEGRE BAR POLIESPORTIU B"],
+["LLIGA BALEAR MASCULINA","BAR CAN SITO CBSM"],
+["FEMENÍ +40","SERVEIS GRÀFICS ESTARELLAS"],
+["VETERANS LLIGA ADAIB","BAR CAN BEIA - CONSTRUMAPH"],
+["ESCOLETA","ESCOLETA CBSM"]];
+let weekendKey="";
+let games=[];
+function mondayOf(dateStr){
+  let d=dateStr?new Date(dateStr+"T12:00:00"):new Date();
+  let day=d.getDay(), diff=(day===0?-6:1-day);
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+function storageKey(){return "cbsm_week_games_"+weekendKey}
+function scheduleKey(){return "cbsm_week_schedule_"+weekendKey}
+function loadWeekend(){
+  games=JSON.parse(localStorage.getItem(storageKey())||"[]").map(g=>({
+    ...g,
+    homeAway:g.homeAway||"Casa",
+    location:g.location||(g.homeAway==="Fora"?"":"Santa Maria")
+  }));
+  $("weekendDate").value=weekendKey;
+  let f=new Date(weekendKey+"T12:00:00"), su=new Date(f); su.setDate(f.getDate()+6);
+  $("weekendLabel").textContent="Setmana: "+f.toLocaleDateString("ca-ES")+" – "+su.toLocaleDateString("ca-ES");
+  renderList(); refreshGenerated(); renderSavedWeeks();
+}
+function selectWeekend(){weekendKey=mondayOf($("weekendDate").value);loadWeekend()}
+function newWeekend(){weekendKey=mondayOf($("weekendDate").value||new Date().toISOString().slice(0,10));loadWeekend()}
+const $=id=>document.getElementById(id), mins=t=>{let [h,m]=t.split(":").map(Number);return h*60+m},
+fmt=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"),
+round30=m=>Math.ceil(m/30)*30;
+function init(){
+ $("equip").innerHTML=teams.map((x,i)=>`<option value="${i}">${x[1]}</option>`).join("");
+ weekendKey=mondayOf(new Date().toISOString().slice(0,10));
+ loadWeekend();
+}
+function showTab(id,b){document.querySelectorAll("section").forEach(x=>x.classList.add("hidden"));$(id).classList.remove("hidden");document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));if(b)b.classList.add("active")}
+function save(){
+  localStorage.setItem(storageKey(),JSON.stringify(games));
+  renderList();
+  refreshGenerated();
+  renderSavedWeeks();
+}
+function toggleVenue(){
+  const away=$("condicio").value==="Fora";
+  $("lloc").disabled=!away;
+  $("pista").disabled=away;
+  $("durada").disabled=away;
+  if(away && !$("lloc").value) $("lloc").focus();
+}
+function addGame(){
+ let ti=+$("equip").value, day=$("dia").value, min=$("minima").value||"09:00";
+ const homeAway=$("condicio").value;
+ if(homeAway==="Casa" && ["Dilluns","Dimarts","Dimecres","Dijous","Divendres"].includes(day)&&mins(min)<1020)min="17:00";
+ games.push({
+   id:Date.now(),day,category:teams[ti][0],team:teams[ti][1],
+   visitor:$("visitant").value.trim()||"Rival",
+   duration:homeAway==="Casa"?(+$("durada").value||90):0,
+   court:homeAway==="Casa"?$("pista").value:"—",
+   min,
+   homeAway,
+   location:homeAway==="Casa"?"Santa Maria":($("lloc").value.trim()||"Fora")
+ });
+ $("visitant").value=""; $("lloc").value=""; save();
+}
+function delGame(id){games=games.filter(g=>g.id!==id);save()}
+function clearGames(){
+  if(confirm("Vols eliminar tots els partits?")){
+    games=[];
+    localStorage.removeItem(scheduleKey());
+    save();
+  }
+}
+function renderList(){
+ if(!games.length){$("list").innerHTML="<p class='small'>Encara no hi ha partits.</p>";return}
+ $("list").innerHTML=`<table><tr><th>Dia</th><th>Categoria</th><th>Equip</th><th>Casa/Fora</th><th>Rival</th><th>Lloc</th><th>Hora</th><th>Durada</th><th>Pista</th><th></th></tr>`+
+ games.map(g=>`<tr>
+ <td>${g.day}</td><td>${g.category}</td><td>${g.team}</td><td>${g.homeAway||"Casa"}</td>
+ <td>${g.visitor}</td><td>${g.location||"Santa Maria"}</td><td>${g.min}</td>
+ <td>${g.homeAway==="Fora"?"—":g.duration+" min"}</td><td>${g.homeAway==="Fora"?"—":g.court}</td>
+ <td><button class="danger" onclick="delGame(${g.id})">×</button></td></tr>`).join("")+"</table>"
+}
+
+function buildSchedule(){
+  let sched=[], availability={};
+  ["Dilluns","Dimarts","Dimecres","Dijous","Divendres","Dissabte","Diumenge"].forEach(d=>{
+    let o=["Dilluns","Dimarts","Dimecres","Dijous","Divendres"].includes(d)?1020:540;
+    availability[d]={Interior:o,Exterior:o};
+  });
+
+  for(const g of games.filter(x=>(x.homeAway||"Casa")==="Casa")){
+    let choices=g.court==="Automàtica"?["Interior","Exterior"]:[g.court];
+    let best=null;
+    for(const c of choices){
+      let start=round30(Math.max(availability[g.day][c],mins(g.min)));
+      if(!best || start<best.start) best={court:c,start};
+    }
+    let end=best.start+g.duration;
+    sched.push({...g,...best,end});
+    availability[g.day][best.court]=round30(end);
+  }
+  return sched;
+}
+
+function refreshGenerated(){
+  const sched=buildSchedule();
+  localStorage.setItem(scheduleKey(),JSON.stringify(sched));
+  render(sched);
+  renderPoster();
+  return sched;
+}
+
+function generate(){
+  const sched=refreshGenerated();
+  showTab("quadrant",document.querySelectorAll(".tabs button")[1]);
+  return sched;
+}
+
+function render(sched){
+ sched=sched||JSON.parse(localStorage.getItem(scheduleKey())||"[]"); let html="", problems=[];
+ for(const day of ["Dilluns","Dimarts","Dimecres","Dijous","Divendres","Dissabte","Diumenge"]){
+   let weekday=["Dilluns","Dimarts","Dimecres","Dijous","Divendres"].includes(day);
+   let start=weekday?1020:540,end=1380, ds=sched.filter(g=>g.day===day);
+
+   // De dilluns a dijous, si no hi ha cap partit, no mostram aquell dia al quadrant.
+   if(["Dilluns","Dimarts","Dimecres","Dijous"].includes(day) && ds.length===0) continue;
+
+   if(ds.length) end=Math.max(end,...ds.map(g=>round30(g.end)));
+   let rows=(end-start)/30, laneH=rows*34;
+   let base=new Date(weekendKey+"T12:00:00"), add=["Dilluns","Dimarts","Dimecres","Dijous","Divendres","Dissabte","Diumenge"].indexOf(day), real=new Date(base); real.setDate(base.getDate()+add);
+   html+=`<div class="dayTitle">${day} · ${real.toLocaleDateString("ca-ES")}</div><div class="schedule">
+   <div class="head">Hora</div><div class="head">Pista interior</div><div class="head">Pista exterior</div>
+   <div>${Array.from({length:rows},(_,i)=>`<div class="time">${fmt(start+i*30)}</div>`).join("")}</div>`;
+   for(const court of ["Interior","Exterior"]){
+     html+=`<div class="lane" style="height:${laneH}px">`;
+     ds.filter(g=>g.court===court).forEach(g=>{
+       let top=(g.start-start)/30*34, height=(g.duration/30)*34;
+       html+=`<div class="game ${court==="Exterior"?"exterior":""}" style="top:${top}px;height:${height}px">
+       <b>${g.team}</b>${g.category} · ${g.visitor}<br><span class="small">${fmt(g.start)}–${fmt(g.end)}</span></div>`;
+     }); html+="</div>";
+   } html+="</div><br>";
+ }
+ $("boards").innerHTML=html||"<p>No hi ha partits.</p>"; $("status").innerHTML=sched.length?`<p class="ok">${sched.length} partits col·locats.</p>`:"";
+}
+
+function dayIndex(day){return ["Dilluns","Dimarts","Dimecres","Dijous","Divendres","Dissabte","Diumenge"].indexOf(day)}
+function realDate(day){
+  const base=new Date(weekendKey+"T12:00:00"), d=new Date(base);
+  d.setDate(base.getDate()+dayIndex(day)); return d;
+}
+function shortTeamName(team,cat){
+  const custom = {
+    "ESCOLETA CBSM":"Club Bàsquet Santa Maria",
+    "CB SANTA MARIA VERD FEM A":"Premini femení verd",
+    "CB SANTA MARIA NEGRE FEM B":"Premini femení negre",
+    "CB SANTA MARIA VERD MASC A":"Premini masculí verd",
+    "CB SANTA MARIA NEGRE MASC B":"Premini masculí negre",
+    "CBSM ILLES CONTROL":"Júnior masculí",
+    "CBSM ENGEL & VÖLKERS MALLORCA CENTRA":"Júnior femení interilles",
+    "BOJOS PER LA CUINA CBSM":"Sènior insular femení",
+    "BIP BIP SUPERMERCATS CBSM":"Sènior insular masculí",
+    "BAR CAN SITO CBSM":"Sènior balear masculí",
+    "SERVEIS GRÀFICS ESTARELLAS":"Femení +40 · Serveis Gràfics Estarellas",
+    "BAR CAN BEIA - CONSTRUMAPH":"Veterans Lliga ADAIB · Bar Can Beia - Construmaph"
+  };
+  if(custom[team]) return custom[team];
+  let t=team.replace(/^CB SANTA MARIA\s*/,"").replace(/^CBSM\s*/,"");
+  return t||cat;
+}
+function teamClass(cat,team){
+  const txt=(cat+" "+team).toUpperCase();
+  if(txt.includes("ESCOLETA")) return "school";
+  if(txt.includes("FEM")) return "fem";
+  return "masc";
+}
+function posterGroups(){
+  const desiredLeft = [
+    "ESCOLETA CBSM",
+    "CB SANTA MARIA VERD FEM A",
+    "CB SANTA MARIA NEGRE FEM B",
+    "CB SANTA MARIA VERD FLORISTERIA ES BROT A",
+    "CB SANTA MARIA NEGRE ILLA BEACH HOTELS B",
+    "CB SANTA MARIA VERD ENGEL&VÖLKERS MALLORCA CENTRAL A",
+    "CB SANTA MARIA NEGRE LABO'LIFE B",
+    "CB SANTA MARIA ENGEL&VÖLKERS MALLORCA CENTRAL",
+    "CBSM ENGEL & VÖLKERS MALLORCA CENTRA",
+    "BOJOS PER LA CUINA CBSM",
+    "SERVEIS GRÀFICS ESTARELLAS"
+  ];
+  const desiredRight = [
+    "CB SANTA MARIA VERD MASC A",
+    "CB SANTA MARIA NEGRE MASC B",
+    "CB SANTA MARIA GERRERIA SERRA",
+    "CB SANTA MARIA VERD CELLER SEBASTIA PASTOR A",
+    "CB SANTA MARIA NEGRE BAR POLIESPORTIU B",
+    "CB SANTA MARIA VERD DENTAL SANTA MARIA A",
+    "CB SANTA MARIA NEGRE CELLER SA SINI B",
+    "CBSM ILLES CONTROL",
+    "BIP BIP SUPERMERCATS CBSM",
+    "BAR CAN SITO CBSM",
+    "BAR CAN BEIA - CONSTRUMAPH"
+  ];
+
+  const rows = teams.map(([cat,team],i)=>({cat,team,index:i,cls:teamClass(cat,team)}));
+  const byTeam = new Map(rows.map(r => [r.team, r]));
+  const left = desiredLeft.map(t => byTeam.get(t)).filter(Boolean);
+  const right = desiredRight.map(t => byTeam.get(t)).filter(Boolean);
+
+  rows.forEach(r=>{
+    if(left.includes(r) || right.includes(r)) return;
+    (r.cls==="masc" ? right : left).push(r);
+  });
+
+  return [left,right];
+}
+function fixtureFor(team){
+  const gs=games.filter(g=>g.team===team).sort((a,b)=>dayIndex(a.day)-dayIndex(b.day)||mins(a.min)-mins(b.min));
+  if(!gs.length) return null;
+  return gs[0];
+}
+function posterRow(row,schedule){
+  const g=fixtureFor(row.team);
+  let cells=`<td class="teamCell ${row.cls}">${row.cat}<span class="sponsor">${shortTeamName(row.team,row.cat)}</span></td>`;
+  if(!g) return `<tr>${cells}<td class="emptyGame"></td><td class="emptyGame"></td><td class="emptyGame"></td></tr>`;
+  const sch=schedule.find(x=>x.id===g.id);
+  const actual=(g.homeAway||"Casa")==="Casa" && sch ? sch.start : mins(g.min);
+  const d=realDate(g.day);
+  const dayTxt=`${g.day} ${d.getDate()}<br><b>${fmt(actual)}</b>`;
+  const cls=(g.homeAway||"Casa")==="Casa"?"homeGame":"awayGame";
+  const place=(g.homeAway||"Casa")==="Casa"?"Santa Maria":(g.location||"Fora");
+  return `<tr>${cells}<td class="${cls}">${place}</td><td class="${cls}">${dayTxt}</td><td class="${cls}">${g.visitor}</td></tr>`;
+}
+function renderPoster(){
+  const schedule=JSON.parse(localStorage.getItem(scheduleKey())||"[]");
+  const monday=new Date(weekendKey+"T12:00:00"), sunday=new Date(monday); sunday.setDate(monday.getDate()+6);
+  const opts={day:"numeric",month:"long"};
+  $("posterTitle").textContent=`Setmana del ${monday.toLocaleDateString("ca-ES",opts)} al ${sunday.toLocaleDateString("ca-ES",{day:"numeric",month:"long",year:"numeric"})}`;
+  const [left,right]=posterGroups();
+  const mk=rows=>`<table class="fixtureTable"><tbody>${rows.map(r=>posterRow(r,schedule)).join("")}</tbody></table>`;
+  $("posterBoards").innerHTML=`<div class="posterGrid"><div>${mk(left)}</div><div>${mk(right)}</div></div>`;
+}
+
+
+function weekLabelFromKey(key){
+  const d=new Date(key+"T12:00:00"), su=new Date(d); su.setDate(d.getDate()+6);
+  return `${d.toLocaleDateString("ca-ES")} – ${su.toLocaleDateString("ca-ES")}`;
+}
+function getSavedWeeks(){
+  const prefix="cbsm_week_games_";
+  const weeks=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k && k.startsWith(prefix)){
+      const wk=k.slice(prefix.length);
+      try{
+        const arr=JSON.parse(localStorage.getItem(k)||"[]");
+        if(Array.isArray(arr)) weeks.push({key:wk,count:arr.length});
+      }catch(e){}
+    }
+  }
+  return weeks.sort((a,b)=>b.key.localeCompare(a.key));
+}
+function renderSavedWeeks(){
+  const box=$("savedWeeks"); if(!box) return;
+  const weeks=getSavedWeeks();
+  if(!weeks.length){box.innerHTML="<p class='small'>Encara no hi ha cap setmana guardada.</p>";return}
+  box.innerHTML=weeks.map(w=>`
+    <div class="savedWeek">
+      <div><strong>${weekLabelFromKey(w.key)}</strong><div class="meta">${w.count} partit${w.count===1?"":"s"}</div></div>
+      <div class="weekBtns">
+        <button class="primary" onclick="openSavedWeek('${w.key}')">Obrir</button>
+        <button class="danger" onclick="deleteSavedWeek('${w.key}')">Eliminar</button>
+      </div>
+    </div>`).join("");
+}
+function openSavedWeek(key){
+  weekendKey=key;
+  loadWeekend();
+  $("weekendDate").value=key;
+  showTab("partits",document.querySelectorAll(".tabs button")[0]);
+}
+function deleteSavedWeek(key){
+  if(!confirm("Vols eliminar aquesta setmana guardada?")) return;
+  localStorage.removeItem("cbsm_week_games_"+key);
+  localStorage.removeItem("cbsm_week_schedule_"+key);
+  if(weekendKey===key){
+    games=[];
+    renderList(); refreshGenerated();
+  }
+  renderSavedWeeks();
+}
+function exportBackup(){
+  const data={version:1,weeks:{}};
+  getSavedWeeks().forEach(w=>{
+    data.weeks[w.key]={
+      games:JSON.parse(localStorage.getItem("cbsm_week_games_"+w.key)||"[]"),
+      schedule:JSON.parse(localStorage.getItem("cbsm_week_schedule_"+w.key)||"[]")
+    };
+  });
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download="Quadrant_CBSM_copia_seguretat.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function importBackupFile(ev){
+  const file=ev.target.files?.[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      if(!data.weeks) throw new Error("Format incorrecte");
+      Object.entries(data.weeks).forEach(([key,val])=>{
+        localStorage.setItem("cbsm_week_games_"+key,JSON.stringify(val.games||[]));
+        localStorage.setItem("cbsm_week_schedule_"+key,JSON.stringify(val.schedule||[]));
+      });
+      renderSavedWeeks();
+      alert("Còpia importada correctament.");
+    }catch(e){alert("No s'ha pogut importar la còpia.");}
+  };
+  r.readAsText(file);
+  ev.target.value="";
+}
+
+init();
+toggleVenue();
+renderSavedWeeks();
+
+let deferredInstallPrompt=null;
+window.addEventListener("beforeinstallprompt",(e)=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  const b=document.getElementById("installBtn");
+  if(b)b.style.display="inline-block";
+});
+document.addEventListener("click",async(e)=>{
+  if(e.target && e.target.id==="installBtn" && deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt=null;
+    e.target.style.display="none";
+  }
+});
+window.addEventListener("appinstalled",()=>{
+  const b=document.getElementById("installBtn");
+  if(b)b.style.display="none";
+});
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(()=>{}));
+}
+
+</script>
+</body></html>
