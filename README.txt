@@ -1,4 +1,4 @@
-QUADRANT CBSM v6 MULTIUSUARI
+QUADRANT CBSM v6.1 MULTIUSUARI
 
 QUÈ CANVIA
 - Tots els usuaris autoritzats treballen sobre el mateix quadrant.
@@ -25,3 +25,8 @@ IMPORTANT
 - Revocar l'accés des de l'app elimina el permís per veure/modificar el quadrant.
 - El compte pot continuar apareixent a Firebase Authentication; això no li dona accés sense el document de membre.
 - No comparteixis la teva contrasenya d'administrador.
+
+
+MILLORA v6.1
+- Si un mateix equip té 2 o més partits dins la mateixa setmana, ara apareixen TOTS al quadrant “Partits de la setmana”.
+- La cel·la de l'equip queda agrupada i els diferents partits surten en files separades.

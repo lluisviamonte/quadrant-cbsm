@@ -31,7 +31,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 .posterGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .fixtureTable{width:100%;border-collapse:collapse;table-layout:fixed}
 .fixtureTable td{border:1px solid #555;padding:8px 10px;text-align:center;height:58px;font-size:14px}
-.fixtureTable .teamCell{color:#fff;text-align:left;width:38%;font-weight:700}
+.fixtureTable .teamCell{color:#fff;text-align:left;width:38%;font-weight:700;vertical-align:middle}
 .fixtureTable .teamCell.fem{background:#a80f55}
 .fixtureTable .teamCell.masc{background:#3aaa35}
 .fixtureTable .teamCell.school{background:#111}
@@ -123,7 +123,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
 <body>
 <header>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v6 multiusuari</span></h1>
+        <h1>Quadrant de partits · CB Santa Maria <span style="font-size:11px;opacity:.65">v6.1 multiusuari</span></h1>
         <button id="installBtn" class="secondary noPrint" style="display:none">Instal·lar app</button>
       </div>
     </header>
@@ -487,22 +487,29 @@ function posterGroups(){
 
   return [left,right];
 }
-function fixtureFor(team){
-  const gs=games.filter(g=>g.team===team).sort((a,b)=>dayIndex(a.day)-dayIndex(b.day)||mins(a.min)-mins(b.min));
-  if(!gs.length) return null;
-  return gs[0];
+function fixturesFor(team){
+  return games
+    .filter(g=>g.team===team)
+    .sort((a,b)=>dayIndex(a.day)-dayIndex(b.day)||mins(a.min)-mins(b.min));
 }
-function posterRow(row,schedule){
-  const g=fixtureFor(row.team);
-  let cells=`<td class="teamCell ${row.cls}">${row.cat}<span class="sponsor">${shortTeamName(row.team,row.cat)}</span></td>`;
-  if(!g) return `<tr>${cells}<td class="emptyGame"></td><td class="emptyGame"></td><td class="emptyGame"></td></tr>`;
-  const sch=schedule.find(x=>x.id===g.id);
-  const actual=(g.homeAway||"Casa")==="Casa" && sch ? sch.start : mins(g.min);
-  const d=realDate(g.day);
-  const dayTxt=`${g.day} ${d.getDate()}<br><b>${fmt(actual)}</b>`;
-  const cls=(g.homeAway||"Casa")==="Casa"?"homeGame":"awayGame";
-  const place=(g.homeAway||"Casa")==="Casa"?"Santa Maria":(g.location||"Fora");
-  return `<tr>${cells}<td class="${cls}">${place}</td><td class="${cls}">${dayTxt}</td><td class="${cls}">${g.visitor}</td></tr>`;
+function posterRows(row,schedule){
+  const gs=fixturesFor(row.team);
+  const teamCell=(rowspan=1)=>`<td class="teamCell ${row.cls}"${rowspan>1?` rowspan="${rowspan}"`:""}>${row.cat}<span class="sponsor">${shortTeamName(row.team,row.cat)}</span></td>`;
+
+  if(!gs.length){
+    return `<tr>${teamCell()}<td class="emptyGame"></td><td class="emptyGame"></td><td class="emptyGame"></td></tr>`;
+  }
+
+  return gs.map((g,i)=>{
+    const sch=schedule.find(x=>x.id===g.id);
+    const actual=(g.homeAway||"Casa")==="Casa" && sch ? sch.start : mins(g.min);
+    const d=realDate(g.day);
+    const dayTxt=`${g.day} ${d.getDate()}<br><b>${fmt(actual)}</b>`;
+    const cls=(g.homeAway||"Casa")==="Casa"?"homeGame":"awayGame";
+    const place=(g.homeAway||"Casa")==="Casa"?"Santa Maria":(g.location||"Fora");
+    const firstCell=i===0?teamCell(gs.length):"";
+    return `<tr>${firstCell}<td class="${cls}">${place}</td><td class="${cls}">${dayTxt}</td><td class="${cls}">${g.visitor}</td></tr>`;
+  }).join("");
 }
 function renderPoster(){
   const schedule=JSON.parse(localStorage.getItem(scheduleKey())||"[]");
@@ -510,7 +517,7 @@ function renderPoster(){
   const opts={day:"numeric",month:"long"};
   $("posterTitle").textContent=`Setmana del ${monday.toLocaleDateString("ca-ES",opts)} al ${sunday.toLocaleDateString("ca-ES",{day:"numeric",month:"long",year:"numeric"})}`;
   const [left,right]=posterGroups();
-  const mk=rows=>`<table class="fixtureTable"><tbody>${rows.map(r=>posterRow(r,schedule)).join("")}</tbody></table>`;
+  const mk=rows=>`<table class="fixtureTable"><tbody>${rows.map(r=>posterRows(r,schedule)).join("")}</tbody></table>`;
   $("posterBoards").innerHTML=`<div class="posterGrid"><div>${mk(left)}</div><div>${mk(right)}</div></div>`;
 }
 
